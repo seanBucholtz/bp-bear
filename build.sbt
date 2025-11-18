@@ -33,11 +33,13 @@ lazy val root = (project in file("."))
       // JSON
       "dev.zio" %% "zio-json" % "0.6.2",
 
-      // Doobie (Postgres + Hikari + ZIO)
-      "org.tpolecat" %% "doobie-core"     % "1.0.0-RC4",
-      "org.tpolecat" %% "doobie-postgres" % "1.0.0-RC4",
-      "org.tpolecat" %% "doobie-hikari"   % "1.0.0-RC4",
-      "org.tpolecat" %% "doobie-zio"      % "1.0.0-RC4",
+      // Doobie (Postgres + Hikari)
+      "org.tpolecat" %% "doobie-core"     % "1.0.0-RC9",
+      "org.tpolecat" %% "doobie-postgres" % "1.0.0-RC9",
+      "org.tpolecat" %% "doobie-hikari"   % "1.0.0-RC9",
+
+      // ZIO <-> Cats Effect interop (for Doobie)
+      "dev.zio" %% "zio-interop-cats" % "23.1.0.5",
 
       // Flyway for database migrations
       "org.flywaydb" % "flyway-core" % "10.7.1",
