@@ -1,26 +1,19 @@
 package app.bpbear.config
 
-import zio.*
-import zio.config.*
-import zio.config.magnolia.DeriveConfigDescriptor
-import zio.config.typesafe.TypesafeConfigSource
+import zio._
+//import zio.config._
+//import zio.config.typesafe.TypesafeConfigProvider
 
-final case class AppConfig(
-                            dbUrl: String,
-                            dbUser: String,
-                            dbPassword: String,
-                            dbDriver: String,
-                            serverPort: Int
-                          )
+final case class AppConfig(serverPort: Int, serverHost: String)
 
 object AppConfig {
-  val descriptor = DeriveConfigDescriptor.descriptor[AppConfig]
 
-  val live: ZLayer[Any, Throwable, AppConfig] =
-    ZLayer {
-      for {
-        source <- ZIO.attempt(TypesafeConfigSource.fromDefaultLoader())
-        config <- read(descriptor from source)
-      } yield config
-    }
+  // Define the config schema manually (ZIO Config 4.x)
+  val config: Config[AppConfig] =
+    (Config.int("serverPort") zip Config.string("serverHost"))
+      .map { case (port, host) => AppConfig(port, host) }
+
+  // Layer that loads the config from application.conf
+  val live: ZLayer[Any, Config.Error, AppConfig] =
+    ZLayer.fromZIO(ZIO.config(config))
 }

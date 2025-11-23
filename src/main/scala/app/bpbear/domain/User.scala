@@ -1,6 +1,6 @@
 package app.bpbear.domain
 
-import zio.json.*
+import zio.json._
 
 case class User(
                  id: Long,

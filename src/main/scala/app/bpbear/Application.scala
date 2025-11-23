@@ -1,55 +1,43 @@
 package app.bpbear
 
-import zio.*
-import zio.http.*
-import app.bpbear.api.*
-import app.bpbear.db.*
-import app.bpbear.repo.*
-import app.bpbear.service.*
+import zio._
+import zio.http._
+import app.bpbear.config.AppConfig
+import zio.config.typesafe.TypesafeConfigProvider
 
 object Application extends ZIOAppDefault {
 
-  // Read DB config from environment with defaults
-  val dbConfig: DbConfig = DbConfig(
-    url = sys.env.getOrElse("DB_URL", "jdbc:postgresql://localhost:5432/bpbear"),
-    user = sys.env.getOrElse("DB_USER", "postgres"),
-    password = sys.env.getOrElse("DB_PASSWORD", ""),
-    driver = sys.env.getOrElse("DB_DRIVER", "org.postgresql.Driver")
-  )
+  private val homeRoute: Route[Any, Nothing] =
+    Method.GET / Root -> handler(Response.text("Hello World!"))
 
-  // Read server port from environment
-  val serverPort: Int = sys.env.getOrElse("SERVER_PORT", "8080").toInt
+  private val jsonRoute: Route[Any, Nothing] =
+    Method.GET / "json" -> handler(Response.json("""{"greetings": "Hello World!"}"""))
 
-  // Combine all routes
-  val routes: HttpApp[Any, Throwable] =
-    ReadingsApi.routes ++
-      UsersApi.routes ++
-      AnalyticsApi.routes
+  private val routes = Routes(homeRoute, jsonRoute)
 
-  // Main HTTP app
-  val app: HttpApp[Any, Throwable] = routes
+  // Explicit type parameter needed for Scala 2.13
+  private val serverConfigLayer: ZLayer[AppConfig, Nothing, Server.Config] =
+    ZLayer.fromFunction((appConfig: AppConfig) =>
+      Server.Config.default.binding(appConfig.serverHost, appConfig.serverPort)
+    )
 
-  override def run: URIO[zio.ZEnv, ExitCode] = {
+  // Compose all layers; include Config.Error for AppConfig.live
+  private val appLayers: ZLayer[Any, Throwable, Server & AppConfig] =
+    ZLayer.make[Server & AppConfig](
+      AppConfig.live,       // ZLayer[Any, Config.Error, AppConfig]
+      serverConfigLayer,    // ZLayer[AppConfig, Nothing, Server.Config]
+      Server.live           // ZLayer[Server.Config, Throwable, Server & Driver]
+    )
 
-    val fullLayer =
-      ZLayer.succeed(dbConfig) >>>
-        Database.live >>>
-        (
-          UserRepo.live ++
-            ReadingRepo.live
-          ) >>>
-        (
-          UserService.live ++
-            ReadingService.live ++
-            AnalyticsService.live
-          )
+  override val bootstrap: ZLayer[Any, Nothing, Unit] =
+    Runtime.setConfigProvider(TypesafeConfigProvider.fromResourcePath())
 
-    Server
-      .serve(app)
-      .provide(
-        Server.default.withPort(serverPort),
-        fullLayer
+  override val run: ZIO[Any, Throwable, Unit] =
+    (for {
+      config <- ZIO.service[AppConfig]                     // get config
+      _      <- Console.printLine(
+        s"Server starting on http://${config.serverHost}:${config.serverPort}"
       )
-      .exitCode
-  }
+      _      <- Server.serve(routes)                       // start HTTP server
+    } yield ()).provideLayer(appLayers)                     // use provideLayer instead of provide
 }

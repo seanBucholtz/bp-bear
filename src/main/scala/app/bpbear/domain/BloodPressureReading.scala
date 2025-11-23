@@ -1,6 +1,6 @@
 package app.bpbear.domain
 
-import zio.json.*
+import zio.json._
 import java.time.Instant
 
 case class BloodPressureReading(
