@@ -7,6 +7,11 @@ import zio.config.typesafe.TypesafeConfigProvider
 
 object Application extends ZIOAppDefault {
 
+  // Bootstrap: ensure application.conf is read
+  override val bootstrap: ZLayer[Any, Nothing, Unit] =
+    Runtime.setConfigProvider(TypesafeConfigProvider.fromResourcePath())
+
+  // Routes
   private val homeRoute: Route[Any, Nothing] =
     Method.GET / Root -> handler(Response.text("Hello World!"))
 
@@ -15,29 +20,27 @@ object Application extends ZIOAppDefault {
 
   private val routes = Routes(homeRoute, jsonRoute)
 
-  // Explicit type parameter needed for Scala 2.13
-  private val serverConfigLayer: ZLayer[AppConfig, Nothing, Server.Config] =
+  // Layer: convert AppConfig to Server.Config
+  private val serverConfigLayer: ZLayer[AppConfig, Throwable, Server.Config] =
     ZLayer.fromFunction((appConfig: AppConfig) =>
       Server.Config.default.binding(appConfig.serverHost, appConfig.serverPort)
     )
 
-  // Compose all layers; include Config.Error for AppConfig.live
+  // Compose all layers
   private val appLayers: ZLayer[Any, Throwable, Server & AppConfig] =
     ZLayer.make[Server & AppConfig](
-      AppConfig.live,       // ZLayer[Any, Config.Error, AppConfig]
-      serverConfigLayer,    // ZLayer[AppConfig, Nothing, Server.Config]
-      Server.live           // ZLayer[Server.Config, Throwable, Server & Driver]
+      AppConfig.live.mapError(e => new RuntimeException(e.toString)),
+      serverConfigLayer,
+      Server.live
     )
 
-  override val bootstrap: ZLayer[Any, Nothing, Unit] =
-    Runtime.setConfigProvider(TypesafeConfigProvider.fromResourcePath())
-
+  // Run server
   override val run: ZIO[Any, Throwable, Unit] =
     (for {
-      config <- ZIO.service[AppConfig]                     // get config
+      config <- ZIO.service[AppConfig]
       _      <- Console.printLine(
         s"Server starting on http://${config.serverHost}:${config.serverPort}"
       )
-      _      <- Server.serve(routes)                       // start HTTP server
-    } yield ()).provideLayer(appLayers)                     // use provideLayer instead of provide
+      _      <- Server.serve(routes)
+    } yield ()).provideLayer(appLayers)
 }
